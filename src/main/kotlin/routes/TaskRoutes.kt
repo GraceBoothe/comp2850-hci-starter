@@ -9,6 +9,8 @@ import io.ktor.server.routing.*
 import io.pebbletemplates.pebble.PebbleEngine
 import java.io.StringWriter
 
+import renderTemplate
+
 /**
  * NOTE FOR NON-INTELLIJ IDEs (VSCode, Eclipse, etc.):
  * IntelliJ IDEA automatically adds imports as you type. If using a different IDE,
@@ -120,6 +122,34 @@ fun Route.taskRoutes() {
         call.response.headers.append("Location", "/tasks")
         call.respond(HttpStatusCode.SeeOther)
     }
+
+    // Fragment endpoint for HTMX updates
+    get("/tasks/fragment") {
+        val q = call.request.queryParameters["q"]?.trim().orEmpty()
+        val page = call.request.queryParameters["page"]?.toIntOrNull() ?: 1
+        val pageData = TaskRepository.search(q, page, 10)
+
+        val list = call.renderTemplate("tasks/_list.peb", mapOf("page" to pageData, "q" to q))
+        val pager = call.renderTemplate("tasks/_pager.peb", mapOf("page" to pageData, "q" to q))
+        val status = """<div id="status" hx-swap-oob="true">Updated: showing ${pageData.items.size} of ${pageData.total} tasks</div>"""
+
+        call.respondText(list + pager + status, ContentType.Text.Html)
+    }
+
+    // Update existing GET /tasks to use pagination
+    get("/tasks") {
+        val q = call.request.queryParameters["q"]?.trim().orEmpty()
+        val page = call.request.queryParameters["page"]?.toIntOrNull() ?: 1
+        val pageData = TaskRepository.search(q, page, 10)
+
+        val html = call.renderTemplate("tasks/index.peb", mapOf(
+            "page" to pageData,
+            "q" to q,
+            "title" to "Tasks"
+        ))
+        call.respondText(html, ContentType.Text.Html)
+    }
+
 
     /**
      * POST /tasks/{id}/delete - Delete task
